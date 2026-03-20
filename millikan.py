@@ -5,7 +5,7 @@ import math
 # --- 页面设置 ---
 st.set_page_config(page_title="密里根油滴实验计算", layout="wide")
 
-st.title("🧪 密里根油滴实验数据处理")
+st.title("🧪 密里根油滴实验数据处理 SHNU-PHY Lab")
 st.markdown("请在左侧输入实验参数，并在下方录入测量数据。")
 
 # --- 物理逻辑函数 ---
