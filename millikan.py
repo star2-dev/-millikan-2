@@ -59,7 +59,7 @@ with col1:
     if "动态" in method:
         tr_val = st.number_input("上升时间 tr (s)", value=10.0, step=0.1)
     
-    if st.button("➕ 添加数据 开始计算"):
+    if st.button("➕ 开始计算"):
         r, q, n, e_calc = calculate_millikan(tf_val, u_val, tr_val, method, d, l)
         st.session_state.history.append({
             "方法": method[:2],
