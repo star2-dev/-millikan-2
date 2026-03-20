@@ -1,101 +1,93 @@
+import streamlit as st
+import pandas as pd
 import math
 
-class MillikanExperiment:
-    def __init__(self):
-        # --- 默认物理常量 (可根据实验室具体参数修改) ---
-        self.g = 9.8015        # 重力加速度 (m/s^2)
-        self.rho_oil = 981.0   # 油的密度 (kg/m^3)
-        self.rho_air = 1.205   # 空气密度 (kg/m^3)
-        self.eta = 1.83e-5     # 空气粘滞系数 (Pa·s)
-        self.d = 5.00e-3       # 极板间距 (m)
-        self.l = 1.50e-3       # 下落/上升距离 (m)
-        self.b = 6.17e-6       # 修正常数 (m·cmHg)
-        self.p = 76.0          # 大气压强 (cmHg)
-        self.e_standard = 1.602e-19 # 标准电荷量 (C)
+# --- 页面设置 ---
+st.set_page_config(page_title="密里根油滴实验计算", layout="wide")
 
-    def calculate_radius(self, tf):
-        """计算油滴半径 r"""
-        vf = self.l / tf
-        r = math.sqrt((9 * self.eta * vf) / (2 * (self.rho_oil - self.rho_air) * self.g))
-        return r
+st.title("🧪 密里根油滴实验数据处理")
+st.markdown("请在左侧输入实验参数，并在下方录入测量数据。")
 
-    def cunningham_correction(self, q_raw, r):
-        """库宁汉修正: q = q_raw / (1 + b/(p*r))^1.5"""
-        correction_factor = math.pow(1 + (self.b / (self.p * r)), 1.5)
-        return q_raw / correction_factor
+# --- 物理逻辑函数 ---
+def calculate_millikan(tf, U, tr, method, d, l):
+    # 物理常量
+    g = 9.8015
+    rho_oil = 981.0
+    rho_air = 1.205
+    eta = 1.83e-5
+    b = 6.17e-6
+    p = 76.0
+    e_std = 1.602176634e-19
 
-    def static_method(self, tf, U):
-        """静态法计算"""
-        r = self.calculate_radius(tf)
-        # q = mgd/U -> m = 4/3 * pi * r^3 * delta_rho
-        delta_rho = self.rho_oil - self.rho_air
-        mass = (4/3) * math.pi * (r**3) * delta_rho
-        q_raw = (mass * self.g * self.d) / U
-        q_final = self.cunningham_correction(q_raw, r)
-        return r, q_final
-
-    def dynamic_method(self, tf, tr, U):
-        """动态法计算"""
-        r = self.calculate_radius(tf)
-        vf = self.l / tf
-        vr = self.l / tr
-        # q = 6 * pi * eta * r * (vf + vr) * d / U
-        q_raw = (6 * math.pi * self.eta * r * (vf + vr) * self.d) / U
-        q_final = self.cunningham_correction(q_raw, r)
-        return r, q_final
-
-def main():
-    app = MillikanExperiment()
-    print("="*30)
-    print(" 密里根油滴实验数据处理程序 ")
-    print("="*30)
+    vf = l / tf
+    r = math.sqrt((9 * eta * vf) / (2 * (rho_oil - rho_air) * g))
     
-    method = input("请选择实验方法 (1.静态法 / 2.动态法): ")
+    if "静态" in method:
+        q_raw = ((4/3) * math.pi * (r**3) * (rho_oil - rho_air) * g * d) / U
+    else:
+        vr = l / tr
+        q_raw = (6 * math.pi * eta * r * (vf + vr) * d) / U
     
-    results = []
-    
-    while True:
-        try:
-            print("\n请输入数据 (输入 'q' 结束当前输入):")
-            tf_input = input("下落时间 tf (s): ")
-            if tf_input.lower() == 'q': break
-            tf = float(tf_input)
-            
-            u_input = input("平衡/上升电压 U (V): ")
-            U = float(u_input)
-            
-            if method == '1':
-                r, q = app.static_method(tf, U)
-            else:
-                tr = float(input("上升时间 tr (s): "))
-                r, q = app.dynamic_method(tf, tr, U)
-            
-            n = round(q / app.e_standard)
-            e_calc = q / n if n != 0 else 0
-            
-            results.append({
-                'r': r,
-                'q': q,
-                'n': n,
-                'e': e_calc
-            })
-            print(f"计算结果: 电荷量 q = {q:.4e} C, 估计电荷数 n = {n}")
-            
-        except ValueError:
-            print("输入错误，请输入数字。")
+    # 库宁汉修正
+    q = q_raw / math.pow(1 + (b / (p * r)), 1.5)
+    n = round(q / e_std)
+    e_calc = q / n if n != 0 else 0
+    return r, q, n, e_calc
 
-    if results:
-        print("\n" + "="*50)
-        print(f"{'序号':<4} | {'半径(m)':<10} | {'电荷量(C)':<12} | {'n':<4} | {'单电子电量':<12}")
-        print("-" * 50)
-        for i, res in enumerate(results):
-            print(f"{i+1:<6} | {res['r']:>.4e} | {res['q']:>.4e} | {res['n']:<4} | {res['e']:>.4e}")
+# --- 侧边栏：设置仪器参数 ---
+with st.sidebar:
+    st.header("⚙️ 仪器参数")
+    d_mm = st.number_input("极板间距 d (mm)", value=5.00, step=0.01)
+    l_mm = st.number_input("测量距离 l (mm)", value=1.50, step=0.01)
+    d = d_mm / 1000.0
+    l = l_mm / 1000.0
+
+# --- 初始化数据存储 ---
+if 'history' not in st.session_state:
+    st.session_state.history = []
+
+# --- 输入区域 ---
+col1, col2 = st.columns([1, 2])
+
+with col1:
+    st.subheader("📥 录入数据")
+    method = st.selectbox("选择方法", ["静态法 (平衡法)", "动态法 (升降法)"])
+    u_val = st.number_input("平衡/上升电压 U (V)", value=250.0, step=1.0)
+    tf_val = st.number_input("下落时间 tf (s)", value=15.0, step=0.1)
+    
+    tr_val = 0.0
+    if "动态" in method:
+        tr_val = st.number_input("上升时间 tr (s)", value=10.0, step=0.1)
+    
+    if st.button("➕ 添加数据"):
+        r, q, n, e_calc = calculate_millikan(tf_val, u_val, tr_val, method, d, l)
+        st.session_state.history.append({
+            "方法": method[:2],
+            "U (V)": u_val,
+            "tf (s)": tf_val,
+            "tr (s)": tr_val if "动态" in method else "-",
+            "半径 r (m)": f"{r:.4e}",
+            "电荷 q (C)": f"{q:.4e}",
+            "电子数 n": n,
+            "单电子 e": f"{e_calc:.4e}"
+        })
+
+with col2:
+    st.subheader("📊 结果表格")
+    if st.session_state.history:
+        df = pd.DataFrame(st.session_state.history)
+        st.table(df)
         
-        avg_e = sum(r['e'] for r in results) / len(results)
-        error = abs(avg_e - app.e_standard) / app.e_standard * 100
-        print("-" * 50)
-        print(f"平均单电子电量 e_avg: {avg_e:.4e} C")
-        print(f"相对误差: {error:.2f}%")
-
-if __name__ == "__main__":
-    main()
+        if st.button("🗑️ 清空表格"):
+            st.session_state.history = []
+            st.rerun()
+        
+        # 计算平均值
+        e_list = [float(item["单电子 e"]) for item in st.session_state.history]
+        if e_list:
+            avg_e = sum(e_list) / len(e_list)
+            st.metric("平均单电子电量", f"{avg_e:.4e} C")
+            error = abs(avg_e - 1.602e-19) / 1.602e-19 * 100
+            st.write(f"相对误差: **{error:.2f}%**")
+    else:
+        st.info("暂无数据，请在左侧录入。")
